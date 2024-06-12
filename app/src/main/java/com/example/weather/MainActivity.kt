@@ -105,9 +105,25 @@ class MainActivity : AppCompatActivity() {
 
             val longitude = mLastLocation.longitude
             Log.i("Current Longitude", "$longitude")
+            getLocationWeatherDetails()
         }
     }
 
+    private fun getLocationWeatherDetails(){
+        if(Constants.isNetworkAvailable(this)){
+            Toast.makeText(
+                this@MainActivity,
+                "You are connected to the internet",
+                Toast.LENGTH_SHORT
+                ).show()
+        }else{
+            Toast.makeText(
+                this@MainActivity,
+                "No internet connection available",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
     private fun showRationalDialogForPermissions(){
         AlertDialog.Builder(this)
             .setMessage("It looks like you have turned off permission")
