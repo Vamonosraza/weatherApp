@@ -13,11 +13,17 @@ import androidx.core.view.WindowInsetsCompat
 import com.karumi.dexter.Dexter
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Dialog
 import android.content.ActivityNotFoundException
+import android.content.SharedPreferences
 import android.location.Location
 import android.net.Uri
 import android.os.Looper
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.example.weather.models.WeatherResponse
 import com.example.weather.network.WeatherService
@@ -31,23 +37,48 @@ import com.karumi.dexter.PermissionToken
 import com.karumi.dexter.listener.PermissionRequest
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener
 import retrofit.*
+import com.example.weather.databinding.ActivityMainBinding
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.TimeZone
 
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var tv_Main: TextView
+    private lateinit var tv_Main_description: TextView
+    private lateinit var tv_temp: TextView
+    private lateinit var tv_sunrise_time: TextView
+    private lateinit var tv_sunset_time: TextView
+    private lateinit var tv_humidity: TextView
+    private lateinit var tv_min: TextView
+    private lateinit var tv_max: TextView
+    private lateinit var tv_speed: TextView
+    private lateinit var tv_name: TextView
+    private lateinit var tv_country: TextView
+
+    private lateinit var iv_main: ImageView
+
+    private lateinit var mSharedPreferences: SharedPreferences
+
     private lateinit var mFusedLocationClient : FusedLocationProviderClient
+
+    private var mProgressDialog: Dialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+//        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
+//        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
+//            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+//            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+//            insets
+//        }
+
+
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        mSharedPreferences = getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE)
 
         if (!isLocationEnabled()) {
             Toast.makeText(this, "Please enable location services", Toast.LENGTH_SHORT).show()
@@ -129,17 +160,26 @@ class MainActivity : AppCompatActivity() {
                 latitude, longitude, Constants.METRIC_UNIT, Constants.APP_ID
             )
 
+            showCustomProgressDialog()
+
             listCall.enqueue(object : Callback<WeatherResponse>{
                 override fun onFailure(t: Throwable?) {
 
                     Log.e("Error", t!!.message.toString())
+                    hideProgressDialog()
 
                 }
 
                 override fun onResponse(response: Response<WeatherResponse>?, retrofit: Retrofit) {
 
                     if(response!!.isSuccess){
+
+
+
+                        hideProgressDialog()
+
                         val weatherList: WeatherResponse = response.body()
+                        setupUI(weatherList)
                         Log.i("Response Result", "$weatherList")
                     }else{
                         val rc = response.code()
@@ -191,5 +231,103 @@ class MainActivity : AppCompatActivity() {
             getSystemService(Context.LOCATION_SERVICE) as LocationManager
         return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)  ||
         locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
+
+    private fun showCustomProgressDialog(){
+        mProgressDialog = Dialog(this)
+        mProgressDialog!!.setContentView(R.layout.dialog_custom_progress)
+
+        mProgressDialog!!.show()
+
+    }
+
+    private fun hideProgressDialog(){
+        if (mProgressDialog != null) {
+            mProgressDialog!!.dismiss()
+
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.menu_main, menu)
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_refresh -> {
+                requestLocationData()
+                true
+            }
+
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+
+
+
+    private fun setupUI(weatherList: WeatherResponse){
+        for(i in weatherList.weather.indices){
+            Log.i("Weather Name", weatherList.weather.toString())
+            tv_Main = findViewById(R.id.tv_main)
+            tv_Main.text = weatherList.weather[i].main
+            tv_Main_description = findViewById(R.id.tv_main_description)
+            tv_Main_description.text = weatherList.weather[i].description
+            tv_temp = findViewById(R.id.tv_temp)
+            tv_temp.text = weatherList.main.temp.toString() + getUnit(application.resources.configuration.locales.toString())
+            tv_sunrise_time = findViewById(R.id.tv_sunrise_time)
+            tv_sunrise_time.text = unixTime(weatherList.sys.sunrise)
+            tv_sunset_time = findViewById(R.id.tv_sunset_time)
+            tv_sunset_time.text = unixTime(weatherList.sys.sunset)
+
+            tv_humidity = findViewById(R.id.tv_humidity)
+            tv_humidity.text = weatherList.main.humidity.toString() + "%"
+            tv_min = findViewById(R.id.tv_min)
+            tv_min.text = weatherList.main.temp_min.toString() + " min"
+            tv_max = findViewById(R.id.tv_max)
+            tv_max.text = weatherList.main.temp_max.toString() + " max"
+            tv_speed = findViewById(R.id.tv_speed)
+            tv_speed.text = weatherList.wind.speed.toString()
+            tv_name = findViewById(R.id.tv_name)
+            tv_name.text = weatherList.name
+            tv_country = findViewById(R.id.tv_country)
+            tv_country.text = weatherList.sys.country
+            iv_main = findViewById(R.id.iv_main)
+
+            when(weatherList.weather[i].icon){
+
+                "01d" -> iv_main.setImageResource(R.drawable.sunny)
+                "02d" -> iv_main.setImageResource(R.drawable.cloud)
+                "03d" -> iv_main.setImageResource(R.drawable.cloud)
+                "04d" -> iv_main.setImageResource(R.drawable.cloud)
+                "04n" -> iv_main.setImageResource(R.drawable.cloud)
+                "10d" -> iv_main.setImageResource(R.drawable.rain)
+                "11d" -> iv_main.setImageResource(R.drawable.storm)
+                "13d" -> iv_main.setImageResource(R.drawable.snowflake)
+                "01n" -> iv_main.setImageResource(R.drawable.cloud)
+                "02n" -> iv_main.setImageResource(R.drawable.cloud)
+                "03n" -> iv_main.setImageResource(R.drawable.cloud)
+                "10n" -> iv_main.setImageResource(R.drawable.cloud)
+                "11n" -> iv_main.setImageResource(R.drawable.rain)
+                "13n" -> iv_main.setImageResource(R.drawable.snowflake)
+                "50n" -> iv_main.setImageResource(R.drawable.cloud)
+
+            }
+        }
+    }
+
+    private fun getUnit(unitSystem: String): String? {
+        Log.i("unit", unitSystem)
+        return "F"
+    }
+
+    private fun unixTime(timex: Int): String? {
+        val date = Date(timex * 1000L)
+        val sdf = SimpleDateFormat("HH:mm")
+        sdf.timeZone = TimeZone.getDefault()
+        return sdf.format(date)
+
+
     }
 }
